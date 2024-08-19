@@ -1,0 +1,342 @@
+---
+title: "Stat183 Individual Presentation Report"
+author: "Harjas Dhaliwal"
+date: "2024-05-08"
+output:
+  html_document:
+     toc: true
+     toc_depth: 3
+     number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(rmarkdown)
+library(ggplot2)
+library(corrplot)
+```
+# Introduction 
+
+**This study uses a dataset from Kaggle to dive into the issue of heart attacks, which affect many families around the world. By understanding the factors that contribute to heart attacks, we aim to help people make better lifestyle choices and take preventative measures to improve their overall quality of life. Our analysis also serves to educate and raise awareness about heart disease. The dataset includes 14 different variables—9 categorical and 5 continuous—helping us explore various aspects that might influence heart health. The particular focus is on predicting whether someone will have a heart attack (indicated by a value of 1) by analyzing the predictors in the dataset and attempting to interpret each value against the output, and against one another to see which trends follow throughout the statistical analysis . Through this, I hope to provide valuable insights for early detection and better health management and overall a better general knowledge.**
+
+# Data Description and Data Cleaning
+
+```{r cars}
+heart_new <- read.csv("heart.csv")
+```
+
+```{r}
+summary(heart_new)
+```
+
+**The first step was to look at our dataset and understand the values that we had in it. Many of these variables, as we can see, are in short form so we first had to decode those and then move forward with our dataset. Using the summary() function we were able to see the distribution and the overall spread of each individual variable and this is important as we move forward in our dataset. Some of the most import findings were in the output, showing that over half of patients have a heart attack and in the cp (chest pain) showing the average chest pain was not that high.**
+
+```{r}
+
+#View Distinct Counts
+
+unique_counts <- sapply(heart_new, function(x) length(unique(x)))
+unique_count_df <- data.frame(variable = names(unique_counts), "count" = unique_counts)
+rownames(unique_count_df) <- unique_count_df$variable
+unique_count_df$variable <- NULL  
+
+unique_count_df
+
+#REMOVE DUPLICATES
+#heart_new <- heart_new %>% distinct()
+
+```
+
+```{r}
+#CHECK FOR MISSING VALS
+
+colSums(is.na(heart_new))
+
+```
+
+**Moving Forward we had to clean our data and check if all of the data was clean and ready for the EDA and modeling stage. To do this we checked for missing values and any duplicate values that were in the dataset. To my surprise, there were none of these and the dataset was already clean.**
+```{r}
+#CHECK DIMENSIONS
+
+dim(heart_new)
+head(heart_new)
+```
+
+# Organizing the Data
+
+```{r}
+#Organize Variables
+
+categorical_vals <- c('sex','exng','caa','cp','fbs','restecg','slp','thall')
+cat_cols <- c(heart_new$sex, heart_new$exng, heart_new$caa, heart_new$cp, heart_new$fbs, heart_new$restecg,heart_new$slp, heart_new$thall)
+
+
+continous_vals <- c("age","trtbps","chol","thalachh","oldpeak")
+cont_cols <- c(heart_new$age, heart_new$trtbps, heart_new$chol, heart_new$thalachh, heart_new$oldpeak)
+
+
+goal_val <- c("output")
+goal_col <- c(heart_new$output)
+
+
+cat("categorical vals are: ", categorical_vals)
+cat("\ncontinous vals are: ", continous_vals)
+
+
+```
+
+```{r}
+
+#SPLITTING DFS FOR BETTER READING
+
+categorical_data <- heart_new[, categorical_vals]
+continuous_data <- heart_new[, continous_vals]
+
+categorical_data$output <- heart_new$output
+continuous_data$output <- heart_new$output
+
+head(categorical_data)
+head(continuous_data)
+```
+**This next step involved us organizing the data and breaking it down into categorical and numerical data and setting a different subset/dataframe for each. By doing so, we were able to see which variables we could plot against one another and what plots that we could use to bring them both together. Also, while we move onto our modeling, logistic regression models and poisson models sometimes handle categorical and numerical data differently therefore we have to account for that and understand which variable defines what prior.**
+# EDA
+
+```{r}
+par(mfrow = c(2, 2))
+hist(heart_new$chol, main = "Cholesterol", xlab = "Cholesterol Level")
+hist(heart_new$thalachh, main = "Maximum Heart Rate", xlab = "Heart Rate")
+hist(heart_new$oldpeak, main = "Oldpeak", xlab = "Oldpeak Value")
+```
+
+**The histograms display the distribution of cholesterol levels and maximum heart rate among a sample population. The cholesterol levels show a right-skewed distribution, with the majority of values clustered between 200 and 300, and a minimal amount of outliers extending higher. The maximum heart rate data presents a more symmetrical distribution, centered around 150 beats per minute, indicating a normal distribution. Both histograms understand the spread of the respective variables, showing cholesterol levels having a wider range and more pronounced skewness compared to maximum heart rate.**
+
+```{r}
+ggplot(heart_new, aes(x = factor(restecg), y = output)) +
+  geom_violin() +
+  xlab("Resting ECG") +
+  ylab("Output") +
+  ggtitle("Output by Resting ECG")
+```
+
+**The violin plot shows the distribution of the output across different categories of resting electrocardiogram (ECG) results (0, 1, 2). Each category of the resting ECG results has a bimodal distribution, indicating that for each ECG type, there are two prevalent outcomes, either 0 or 1. The 0 or 1 here indicates the presence of heart disease. The shape of the distributions suggests that resting ECG results do not significantly differentiate between the two output classes, as the distributions are quite similar across all three ECG categories. This implies that resting ECG may not be a strong predictor of the output variable in this dataset.**
+
+```{r}
+# Box plot of output by sex
+boxplot(output ~ sex, data = heart_new, xlab = "Sex", ylab = "Output", main = "Output by Sex")
+
+# Box plot of output by chest pain type (cp)
+boxplot(output ~ cp, data = heart_new, xlab = "Chest Pain Type", ylab = "Output", main = "Output by Chest Pain Type")
+```
+
+**The box plot shows the distribution of the output variable (likely indicating the presence of heart disease) by sex. For sex category 0, the median output is around 0.5, with a lower quartile near 0 and an upper quartile around 1, showing a wide range of output values. For sex category 1, the output values are consistently high, with the interquartile range and median all at 1, indicating a higher likelihood of the output variable being 1 for this sex category. This suggests a potential association between sex and the output variable and we will use our models to represent and verify this. In the next plot, it is another box plot that shows chest pain types 0 and 3, the output variable is consistently high, indicating a strong association with the presence of the condition being measured (likely heart disease). Chest pain types 1 and 2 have lower and more variable outputs, suggesting these types are less associated with the condition.**
+
+```{r}
+# Bar plot of output by fbs
+barplot(table(heart_new$output, heart_new$fbs), beside = TRUE, legend.text = TRUE,
+        xlab = "Fasting Blood Sugar", ylab = "Count", main = "Output by Fasting Blood Sugar")
+```
+
+**The bar plot shows the distribution of the output variable again based on fasting blood sugar levels, categorized as 0 (normal) and 1 (high). For individuals with normal fasting blood sugar (0), the counts of the output variable are almost evenly split between 0 and 1, indicating no strong association with heart disease. However, for those with high fasting blood sugar (1), the counts are also nearly equal, suggesting that fasting blood sugar levels alone do not significantly differentiate the presence or absence of the condition being measured, indicating no signficant correlation.**
+
+```{r}
+# Histogram of maximum heart rate (thalachh) colored by output
+hist(heart_new$thalachh[heart_new$output == 0], breaks = 20, col = "blue", xlab = "Maximum Heart Rate",
+     main = "Maximum Heart Rate by Output", xlim = range(heart_new$thalachh), ylim = c(0, max(table(heart_new$thalachh))))
+hist(heart_new$thalachh[heart_new$output == 1], breaks = 20, col = "red", add = TRUE)
+legend("topright", c("Output = 0", "Output = 1"), fill = c("blue", "red"))
+```
+
+**This is a  stacked histogram which displays the distribution of maximum heart rate values for two groups: those with output 0 (blue) and those with output 1 (red). Individuals with an output of 1 (likely indicating the presence of heart disease) tend to have higher maximum heart rates, commonly between 130 and 170 beats per minute. In contrast, individuals with an output of 0 are more evenly distributed across lower maximum heart rate ranges, particularly between 100 and 140 beats per minute. This suggests that higher maximum heart rates are more commonly associated with the presence of the condition being measured.**
+
+```{r}
+ggplot(heart_new , aes(x = chol, y = thalachh, color = factor(output))) +
+  geom_point(alpha = 0.7) +
+  scale_color_manual(values = c("blue", "red"), labels = c("0", "1")) +
+  labs(x = "Cholesterol", y = "Maximum Heart Rate", title = "Cholesterol vs. Maximum Heart Rate",
+       color = "Output") +
+  theme_minimal()
+```
+**The scatter plot shows the relationship between cholesterol levels and maximum heart rate, with points colored by the output variable (0 in blue, 1 in red). There is no clear linear relationship between cholesterol and maximum heart rate, as the points are widely dispersed. Both groups (output 0 and 1) have overlapping distributions, indicating that neither cholesterol nor maximum heart rate alone can distinctly separate the two output categories, indicating low signficance and correlation but we can verify that a higher heart rate is common in those with an output value of 1.**
+
+
+```{r}
+par(mfrow = c(2, 3))
+barplot(table(heart_new$fbs), main = "Fasting Blood Sugar", xlab = "FBS Category")
+barplot(table(heart_new$restecg), main = "Resting ECG", xlab = "ECG Category")
+barplot(table(heart_new$exng), main = "Exercise-induced Angina", xlab = "Angina")
+barplot(table(heart_new$slp), main = "Slope", xlab = "Slope Category")
+barplot(table(heart_new$caa), main = "Number of Major Vessels", xlab = "Number of Vessels")
+barplot(table(heart_new$thall), main = "Thalassemia", xlab = "Thalassemia Category")
+```
+
+**The set of bar plots illustrates the distribution of various categorical variables related to heart disease in our dataset. The first plot shows that the majority of individuals have normal fasting blood sugar levels (category 0), while a smaller portion have elevated fasting blood sugar levels (category 1). The second plot, depicting resting ECG results, indicates an almost even distribution between categories 0 and 1, with very few individuals in category 2. For exercise-induced angina, the  plot reveals that most individuals do not experience this condition (category 0) but those who do, have an output of 1. The fourth plot, showing the distribution of the slope of the peak exercise ST segment, demonstrates that categories 1 and 2 are equally common, with category 0 being much less frequent. Finally, the fifth plot displays the number of major vessels observed, with most individuals having 0 major vessels, and the count decreasing as the number of vessels increases from 1 to 4.**
+
+
+
+
+
+
+
+```{r}
+pairs(heart_new[, c("chol", "thalachh", "oldpeak", "output")], main = "Scatter Plot Matrix")
+
+```
+
+**The scatter plot matrix shows the relationships between cholesterol (chol), maximum heart rate (thalachh), ST depression induced by exercise relative to rest (oldpeak), and the output variable. The plots reveal that there is no clear linear relationship between cholesterol and the other variables. However, the maximum heart rate variable shows a more noticeable clustering pattern with the output variable, suggesting some association between higher maximum heart rates and the output of 1. The oldpeak variable also shows some patterns with the output variable, indicating it may have some predictive value.**
+
+
+```{r}
+cor_matrix <- cor(heart_new)
+corrplot(cor_matrix, method = "color", type = "upper", 
+         tl.col = "black", tl.srt = 45, tl.cex = 0.8,
+         addCoef.col = "black", number.cex = 0.6,
+         col = colorRampPalette(c("blue", "white", "red"))(100))
+```
+
+
+**The heatmap allows us to see the calculated the pairwise correlations between various health-related variables and the output variable. Strong positive correlations are observed between the output variable and chest pain type (cp, 0.43) and maximum heart rate (thalachh, 0.42), indicating that higher values of these variables are associated with a higher likelihood of heart disease. Conversely, strong negative correlations are seen between the output variable and exercise-induced angina (exng, -0.44) and oldpeak (-0.43), suggesting that higher values of these variables are associated with a lower likelihood of heart disease. The matrix also highlights significant correlations among other variables, such as a strong negative correlation between thalachh and oldpeak (-0.58). It is important for our study to analyze both positive and negative correlations to gain a better insight and knowledge into this dataset and our predictive ambtions.**
+
+
+```{r}
+par(mfrow = c(1, 3))
+boxplot(chol ~ output, data = heart_new, main = "Cholesterol by Output", xlab = "Output", ylab = "Cholesterol")
+boxplot(thalachh ~ output, data = heart_new, main = "Maximum Heart Rate by Output", xlab = "Output", ylab = "Heart Rate")
+boxplot(oldpeak ~ output, data = heart_new, main = "Oldpeak by Output", xlab = "Output", ylab = "Oldpeak")
+```
+
+
+**The box plots compare cholesterol levels and maximum heart rate between two output categories, categories that I initially believed to be important prior to research and values I wanted to study more after the heat map.  The cholesterol levels are similar for both groups, with medians around 240 and overlapping interquartile ranges, indicating no significant difference. In contrast, the maximum heart rate is noticeably higher in individuals with heart disease (output = 1), with a median around 160 compared to about 140 for those without heart disease, suggesting that maximum heart rate is a more distinguishing factor between the two groups.**
+
+
+# Model Building
+
+# Model 1 - Logistic Regression Model
+
+```{r}
+
+# Fit the logistic regression model
+model <- glm(output ~ age + sex + cp + trtbps + chol + fbs + restecg + thalachh + exng + oldpeak + slp + caa + thall, data = heart_new, family = binomial(link = "logit"))
+
+# View the model summary
+summary(model)
+
+```
+
+**Our logistic model shows the key significant predictors identified in the analysis being: sex (Estimate = -1.758181, p-value = 0.000176), indicating that being male significantly decreases the log odds of having a heart attack, chest pain type (cp) (Estimate = 0.859851, p-value = 3.52e-06), suggesting that certain types of chest pain significantly increase the log odds. Maximum heart rate achieved (thalachh) (Estimate = 0.023211, p-value = 0.026485) is also associated with increased odds of a heart attack, while on the other hand, exercise-induced angina (exng) (Estimate = -0.979981, p-value = 0.016782) and ST depression (oldpeak) (Estimate = -0.540274, p-value = 0.011523) are both associated with decreased log odds. Along with exng and oldpeak, the type of thalassemia (thall) (Estimate = -0.900432, p-value = 0.001910) is also following a negative correlation. Variables like age (Estimate = -0.004908, p-value = 0.832266), fasting blood sugar (fbs) (Estimate = 0.034888, p-value = 0.947464), cholesterol (chol) (Estimate = -0.004630, p-value = 0.220873), are not statistically significant in predicting heart attacks therefore not necessary in our statistical analysis. The model's AIC value of 239.44 indicates its relative quality in terms of fit. It is important to understand the relationship between the estimate and the p-values that are given so we can better interpret and come to concrete conclusions about our study.**
+
+
+```{r}
+plot(model$residuals)
+abline(h = 0, col = "red")
+```
+
+**The residual plot shows that most residuals are clustered around zero, indicating a reasonably good fit of the model to the data. However, there are some noticeable outliers that we have chosen to leave in our datset rather than filter it out for more clarity and transparency when we are evaluating our hypotheses.**
+
+```{r}
+# Install and load the pROC package if not already installed
+# install.packages("pROC")
+library(pROC)
+
+# Fit the logistic regression model
+model <- glm(output ~ age + sex + cp + trtbps + chol + fbs + restecg + thalachh + exng + oldpeak + slp + caa + thall, data = heart_new, family = binomial(link = "logit"))
+
+# Predict the probabilities using the fitted model
+predicted_probs <- predict(model, type = "response")
+
+# Create the ROC curve
+roc_obj <- roc(heart_new$output, predicted_probs)
+
+# Plot the ROC curve
+plot(roc_obj, main = "ROC Curve", xlab = "False Positive Rate", ylab = "True Positive Rate")
+
+# Calculate the AUC (Area Under the ROC Curve)
+auc_val <- auc(roc_obj)
+print(paste("AUC:", round(auc_val, 3)))
+```
+
+**I used an ROC curve to check for further analysis on if the key predictors we used could effectively predict the chances of a heart attack or not. And with the ROC given above, taken from the logistic regression ; We determine that the curve is well above the diagonal line (random classifier for truth values), which depicts that the model has good discriminatory power. Therefore, proving that there is a potential for high accuracy in this model.**
+
+```{r}
+#install.packages("pscl")
+library(pscl)
+
+mcfadden_rsq <- pR2(model)["McFadden"]
+print(mcfadden_rsq)
+```
+**Due to the way our data is shaped and the difference of categorical and numerical (nominal) values I was unable to fit an actual R^2 or adjusted R^2 for this model. Therefore, I chose to use the McFadden test to fit the full model and evaluate the pseudo R^2 that I achieved. With the McFadden score it is important to note that a score of greater than 0.2 to 0.4 indicates that it is a semi-decent efficient model and a score which is greater than 0.4 indicates an efficent model. With this information, we can conclude that this is an efficent model.**
+
+```{r}
+library(car)
+
+
+logistic_model <- glm(output ~ age + sex + cp + trtbps + chol + fbs + restecg + thalachh + exng + oldpeak + slp + caa + thall, data = heart_new, family = binomial(link = "logit"))
+
+vif_scores <- vif(logistic_model)
+print(vif_scores)
+
+# Check for multicollinearity
+#if (any(vif_scores > 5)) {
+#  print("Multicollinearity is present in the model.")
+#} else {
+#  print("No significant multicollinearity detected.")
+#}
+```
+
+**None of the values are over the VIF threshold of 4, therefore we have no issues with multicollinearity and we are not forced to remove any variables from our model**
+
+# Model 2 - Poisson Model
+
+```{r}
+# Fit the Poisson regression model
+poisson_model <- glm(output ~ age + sex + cp + trtbps + chol + fbs + restecg + thalachh + exng + oldpeak + slp + caa + thall, data = heart_new, family = poisson(link = "log"))
+
+summary(poisson_model)
+```
+
+**The significant predictors in the Poisson model include chest pain type (cp) (Estimate = 0.2294766, p-value = 0.00780) and the coronary artery anomaly (caa) (Estimate = -0.291722, p-value = 0.00835). These variables significantly impact the predicted count of heart attacks. Other variables, such as age (Estimate = 0.0059048, p-value = 0.58387), sex (Estimate = -0.2752333, p-value = 0.10476), and cholesterol (chol) (Estimate = -0.0007578, p-value = 0.65274), are not statistically significant predictors in this model. The model's AIC value is 475.05, indicating its relative quality in terms of model fit. Many of these variables are similar to what we found in the logistic regression model therefore we essentially cross referenced our findings and now we are more confident about our key predictors. The AIC score is greater for the Poisson model which leads us to lean more toward the logistic regression model; but it is important to note that they do have similar findings.**
+
+```{r}
+qqnorm(poisson_model$residuals)
+```
+**In this Q-Q Plot the residuals deviate significantly from the theoretical normal distribution, particularly in the tails. However they still follow a normal distribution and still meet our normality assumptions.**
+
+```{r}
+# Calculate the IRRs and their confidence intervals
+irrs <- exp(coef(poisson_model))
+irr_cis <- exp(confint(poisson_model))
+
+# Print the IRRs and their confidence intervals
+print(irrs)
+print(irr_cis)
+```
+
+**The IRR is the exponentiated coefficients from the Poisson regression model. This indicates the multiplicative change in the rate of the outcome (here, the chance of heart attack events) for a one-unit increase in the predictor variable. In other words, it shows what would happen to the output variable if we changed the predictors' value. Through the output above, we can ensure further that while the cp (chest pain) and the caa (number of blood vessels) have the biggest (positive) effect on our output variable. An example of this statistic is: The IRR for cp is 1.2579414, meaning that a one-unit increase in cp is associated with a 25.79% increase in the rate of heart attacks. The confidence interval for cp (1.0622259 to 1.4900587) does not include 1, indicating that this predictor is statistically significant.**
+
+
+# Durbin Watson Test
+```{r}
+db_test <- durbinWatsonTest(logistic_model)
+db_test
+
+db_poisson <- durbinWatsonTest(poisson_model)
+db_poisson
+```
+**The Durbin Watson test tests for autocorrelation and if the value is under 2 then there is a large amount of autocorrelation. This is a limitation in our dataset because even though our dataset was valid under the AIC score and general models, this presents an issue. Howver, this does lead us to reject the null hypothesis about autocorrelation and the p-value of 0 confirms that this autocorrelation is statistically significant**
+
+
+
+# Conclusion 
+
+**The study identifies key predictors significantly associated with the likelihood and count of heart attack events. Chest pain type (cp) emerged as a strong predictor, with higher chest pain types indicating a greater risk of heart attacks. Additionally, the number of major vessels colored by fluoroscopy (caa) showed that fewer major vessels colored are associated with an increased risk of heart attacks. Maximum heart rate achieved (thalachh) was also a significant predictor, with higher maximum heart rates linked to a higher likelihood of heart attacks. Using comparative analysis and the Durbin-Watson test we were able to come to the conclusion that the logistic regression model provided a better fit than the Poisson model. The lower AIC score of the Logistic Model also added to this. The significant predictors identified in both models align, reinforcing their importance in predicting heart attack events. From here, we can better educate the public and ourselves and learn more about preventative health measures.**
+
+
+# Further Approaches/Limitations
+
+**There are several limitations in this study that I ran into. The Durbin-Watson values indicate significant positive autocorrelation, suggesting that the model may be missing key explanatory variables. To address this, a stepwise or generalized linear model could be more suitable for this dataset. Additionally, investigating the outliers and deviations in residuals is necessary to understand potential underlying factors not captured by the current model. Further normalization of the data and examining correlations between variables could provide deeper insights. Ultimately, I would delve into this further by employing different methods, such as Random Forest or Gradient Boosting, might improve predictive accuracy. The two major limitations identified are autocorrelation and potential overfitting of the data, which need to be addressed in future analyses to enhance the robustness of our predictive model. I would also implement a Shapiro Wilks test in the future if I were to work on this dataset more**
+
+
+
+
