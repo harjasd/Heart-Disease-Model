@@ -57,14 +57,6 @@ The analysis confirmed the importance of certain variables, such as chest pain t
 - **Modeling**: Code for Logistic Regression, Poisson Regression, and evaluation metrics.
 - **Reports**: Detailed findings and analysis summaries.
 
-## Getting Started
 
-To reproduce the analysis:
-1. Clone the repository.
-2. Install the necessary dependencies from `requirements.txt`.
-3. Run the scripts in the order provided in the `README.md` to replicate the data cleaning, EDA, and modeling process.
 
-## Contact
-
-For any questions or suggestions, please contact [Harjas Dhaliwal](mailto:harjasd1@gmail.com).
 
